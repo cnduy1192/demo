@@ -1,0 +1,135 @@
+const roleRow = document.getElementById('roleRow');
+function initials(n){return String(n||'?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase()}
+function roleVI(r){return roleLabel(r);}
+function loginAs(i){
+  me=USERS[i];
+  document.getElementById('login').style.display='none';
+  document.getElementById('app').style.display='block';
+  document.getElementById('sideUser').innerHTML=`<span class="avatar" style="background:${me.color}">${initials(me.name)}</span><span><b>${me.name}</b><small>${roleVI(me.role)}</small></span>`;
+  document.getElementById('hiName').innerHTML=`${T('hdr.hello',{name:me.name})}<small>${roleVI(me.role)} · FI SAIGON JSC</small>`;
+  const av=document.getElementById('hAvatar'); av.textContent=initials(me.name); av.style.background=me.color;
+
+  const c = myCap();
+  document.getElementById('navAdminLabel').style.display = c.admin?'block':'none';
+  document.getElementById('navUsers').style.display = c.admin?'flex':'none';
+  document.getElementById('navCockpitLabel').style.display = c.cockpit?'block':'none';
+  document.getElementById('navCockpit').style.display = c.cockpit?'flex':'none';
+  document.getElementById('navWelcome').style.display = c.weekly?'flex':'none';
+  rebuildNccTabs();
+
+  LS.reset(); LS.mergeActs(); NAV.clear();
+  go(c.cockpit?'cockpit':'funnel'); buildForm(); buildUsers();
+  if(window.refreshNotifs) refreshNotifs(); else renderNotifs();
+  if(c.weeklyAuto) wcMaybeAutoOpen();
+}
+
+function rebuildNccTabs(){
+  const box=document.getElementById('nccTabs'); if(!box)return;
+  box.innerHTML=`<button class="ncc-tab ncc-tab-all${isAllNcc()?' on':''}" data-ncc="${ALL_NCC}" onclick="setNcc('${ALL_NCC}')" title="${T('hdr.allSuppliersHint')}">${ALL_NCC_LABEL}</button>`
+    +NCCS.map(n=>
+    `<button class="ncc-tab${n===nccFilter?' on':''}" data-ncc="${n.replace(/"/g,'&quot;')}" onclick="setNcc('${n.replace(/'/g,"\\'")}')">${n}</button>`).join('');
+}
+window.rebuildNccTabs=rebuildNccTabs;
+
+const VIEWS=['cockpit','funnel','customers','acts','dash','reports','users'];
+function go(v){
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.view===v));
+  VIEWS.forEach(x=>document.getElementById('view-'+x).style.display = x===v?'block':'none');
+
+  const tabs=document.getElementById('nccTabs');
+  if(tabs) tabs.style.display = (v==='cockpit'||v==='customers') ? 'none' : '';
+  if(v==='cockpit')renderCockpit();
+  if(v==='reports')renderReports();
+  if(v==='customers'&&window.renderCustomers)renderCustomers();
+  if(v==='funnel')render(); if(v==='dash')renderDash(); if(v==='acts')renderActs();
+}
+
+function toggleSidebar(force){
+  const shell=document.querySelector('.shell'); if(!shell)return;
+  const min = typeof force==='boolean' ? force : !shell.classList.contains('side-min');
+  shell.classList.toggle('side-min',min);
+  const btn=document.getElementById('sideToggle');
+  if(btn){
+    btn.setAttribute('aria-expanded',String(!min));
+    btn.setAttribute('aria-label',min?T('nav.expand'):T('nav.collapse'));
+  }
+  try{localStorage.setItem('fisg_side',min?'min':'full');}catch(e){}
+
+  setTimeout(()=>{
+    if(typeof CHARTS==='undefined')return;
+    Object.keys(CHARTS).forEach(k=>{try{CHARTS[k].resize();}catch(e){}});
+  },400);
+}
+window.toggleSidebar=toggleSidebar;
+(function(){
+  let saved=null; try{saved=localStorage.getItem('fisg_side');}catch(e){}
+  if(saved!=='min')return;
+  const apply=()=>toggleSidebar(true);
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',apply); else apply();
+})();
+
+function inScope(r){return !nccFilter || isAllNcc() || r.ncc===nccFilter;}
+function visible(){
+  return scopeRecords(RECORDS.filter(inScope), me);
+}
+function visibleActs(){
+  const other = (typeof OTHER_NCC !== 'undefined') ? OTHER_NCC : 'Khác';
+  const base=ACTIVITIES.filter(a=>!nccFilter||isAllNcc()||a.ncc===nccFilter||a.ncc===other);
+  return scopeActs(base, me, scopeRecords(RECORDS, me));
+}
+function setNcc(n){nccFilter=n;stageFilter=null;segDrill=null;
+  if(typeof donutSegDrill!=='undefined')donutSegDrill=null;
+  document.querySelectorAll('.ncc-tab').forEach(t=>t.classList.toggle('on',t.dataset.ncc===n));
+  render();renderDash();renderActs();}
+function canEdit(r){ return capEdit(r, me); }
+function canClose(r){ return capClose(r, me); }
+
+function grp(r){
+  if(r.status!=='IN PROGRESS') return r.status==='WON' ? 'closed-won':'closed-lost';
+  if(!r.closing) return 'later';
+  const d=new Date(r.closing);
+  if(d<TODAY) return 'overdue';
+  const q=Math.floor(TODAY.getMonth()/3), y=TODAY.getFullYear();
+  const rq=Math.floor(d.getMonth()/3), ry=d.getFullYear();
+  if(ry===y&&rq===q) return 'thisq';
+  if((ry===y&&rq===q+1)||(q===3&&ry===y+1&&rq===0)) return 'nextq';
+  if(ry===y) return 'thisyear';
+  return 'later';
+}
+
+const _Q = Math.floor(TODAY.getMonth()/3)+1, _Y = TODAY.getFullYear();
+const _NQ = _Q===4 ? {q:1,y:_Y+1} : {q:_Q+1,y:_Y};
+const MAJORS=[
+  {id:'run', get title(){return T('fn.major.open');}, color:'#1E3A8A', subs:[
+    {id:'overdue', get title(){return T('fn.sub.overdue');}, color:'var(--overdue)'},
+    {id:'thisq', get title(){return T('fn.sub.thisQ',{q:_Q,y:_Y});}, color:'var(--prog)'},
+    {id:'nextq', get title(){return T('fn.sub.nextQ',{q:_NQ.q,y:_NQ.y});}, color:'#B45309'},
+    {id:'thisyear', get title(){return T('fn.sub.restOfYear',{y:_Y});}, color:'var(--sbg)'},
+    {id:'later', get title(){return T('fn.sub.later',{y:_Y+1});}, color:'var(--text-3)'},
+  ]},
+  {id:'closed', get title(){return T('fn.major.closed');}, color:'#565668', subs:[
+    {id:'closed-won', get title(){return T('status.won');}, color:'var(--won)'},
+    {id:'closed-lost', get title(){return T('status.lost');}, color:'var(--lost)'},
+  ]},
+];
+
+/* ---------- i18n: re-render the current view in place on EN | VI switch ---------- */
+if (window.I18N) I18N.onChange(function(){
+  if (typeof me === 'undefined' || !me) return;
+  try {
+    document.getElementById('sideUser').innerHTML=`<span class="avatar" style="background:${me.color}">${initials(me.name)}</span><span><b>${me.name}</b><small>${roleVI(me.role)}</small></span>`;
+    document.getElementById('hiName').innerHTML=`${T('hdr.hello',{name:me.name})}<small>${roleVI(me.role)} · FI SAIGON JSC</small>`;
+    rebuildNccTabs();
+    const shell=document.querySelector('.shell');
+    const btn=document.getElementById('sideToggle');
+    if(shell&&btn) btn.setAttribute('aria-label',shell.classList.contains('side-min')?T('nav.expand'):T('nav.collapse'));
+    const cur=(VIEWS.filter(x=>{const el=document.getElementById('view-'+x);return el&&el.style.display!=='none';})[0])||'funnel';
+    go(cur);
+    if(typeof buildForm==='function') buildForm();
+    if(typeof buildUsers==='function' && cur==='users') buildUsers();
+    const dov=document.getElementById('dov');
+    if(dov && dov.classList.contains('open') && typeof curRec!=='undefined' && curRec){ if(typeof dRenderComments==='function') dRenderComments(); if(typeof dRenderActs==='function') dRenderActs(); }
+    if(typeof wcIsOpen==='function' && wcIsOpen()){ renderWelcome(); if(typeof wcApplyCal==='function') wcApplyCal(); }
+    if(window.refreshNotifs) refreshNotifs(); else if(typeof renderNotifs==='function') renderNotifs();
+  } catch(e){ console.error('[i18n] re-render', e); }
+});

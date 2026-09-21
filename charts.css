@@ -1,0 +1,73 @@
+.card canvas { font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif; }
+
+.donut-box canvas, .line-box canvas, .vol-box canvas { display: block; max-width: 100%; }
+.donut-box { isolation: isolate; }
+
+.donut-center {
+  position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; pointer-events: none; text-align: center;
+  padding: 0 12px; transition: transform .18s ease-out;
+}
+.donut-box:hover .donut-center { transform: scale(1.06); }
+.donut-center b {
+  font: 700 21px/1 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+  font-variant-numeric: tabular-nums; letter-spacing: -.02em;
+}
+.donut-center span {
+  margin-top: 4px; color: var(--ink-3); font-size: 10px; font-weight: 600;
+  line-height: 1.25; max-width: 100%; overflow-wrap: break-word;
+}
+
+#view-dash .card {
+  transition: transform .2s ease-out, box-shadow .2s ease-out, border-color .2s ease-out;
+}
+#view-dash .card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 30px rgba(19, 31, 58, .10);
+}
+#view-dash .card:has(canvas:hover) { border-color: color-mix(in srgb, var(--accent) 28%, var(--line)); }
+
+.vol-card {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "heading switch" "chart chart";
+  align-items: start; column-gap: 16px;
+}
+.vol-card h4 { grid-area: heading; display: flex; align-items: baseline; gap: 8px; flex-wrap:wrap; min-width: 0; }
+.vol-card h4 small {
+  flex-basis: 100%; margin-left: 0; font-size: 11.5px; font-weight: 500; color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.vol-box { grid-area: chart; position: relative; height: 320px; margin-top: 10px; }
+.vol-state {
+  position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+  padding: 24px; text-align: center; color: var(--ink-3); font-size: 12px; font-weight: 600;
+  background: linear-gradient(135deg, rgba(255,255,255,.76), rgba(248,250,252,.94));
+  border: 1px dashed var(--line); border-radius: 10px;
+}
+.vol-state.show { display: flex; }
+
+.vol-switch {
+  grid-area: switch; position: static;
+  display: inline-flex; gap: 2px; padding: 3px;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 9px;
+}
+.vol-tab {
+  min-height: 28px; padding: 0 11px; border: none; border-radius: 7px; cursor: pointer;
+  background: none; color: var(--ink-3); font-family: inherit;
+  font-size: 11.5px; font-weight: 600; letter-spacing: .01em;
+  font-variant-numeric: tabular-nums;
+  transition: background .16s ease-out, color .16s ease-out, box-shadow .16s ease-out;
+}
+.vol-tab:hover { color: var(--ink-2); }
+.vol-tab.on { background: var(--surface); color: var(--accent); box-shadow: var(--shadow); }
+.vol-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+@media (max-width: 720px) {
+  .vol-card { grid-template-columns: 1fr; grid-template-areas: "heading" "switch" "chart"; }
+  .vol-box { height: 300px; }
+  .vol-switch { justify-self: start; margin: -2px 0 2px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vol-tab, #view-dash .card, .donut-center { transition: none; }
+  #view-dash .card:hover { transform: none; }
+}
