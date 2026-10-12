@@ -1,0 +1,2 @@
+# FISG uses client state for pages; unknown paths fall back to the app shell.
+/* /index.html 200
